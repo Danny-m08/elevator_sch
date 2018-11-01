@@ -199,7 +199,15 @@ long my_start_elevator(void)
 		elevator.current_floor = 1;
 		elevator.next_floor = -1;
 
-		return 0;
+		elevator_thread = kthread_run(run_elevator, NULL, "Elevator Thread");
+
+		if (IS_ERR(elevator_thread))
+		{
+			printk("ERROR! run_elevator\n");
+			return PTR_ERR(kthread);
+		}
+
+	return 0;
 }
 
 
@@ -226,8 +234,13 @@ long my_issue_request(int passenger_type, int start_floor, int destination_floor
 
 long my_stop_elevator(void)
 {
+		int ret;
 		printk(KERN_NOTICE "%s: You called stop_elevator\n", __FUNCTION__);
-		return 0;
+	   	ret = kthread_stop(kthread);
+		if (ret != -EINTR)
+			printk("run elevator has stopped\n");
+
+	return 0;
 }
 
 static int elevator_init(void)
@@ -252,14 +265,6 @@ static int elevator_init(void)
 				elevatorSignal[i] = 0;
 		}
 
-		elevator_thread = kthread_run(run_elevator, NULL, "Elevator Thread");
-
-		if (IS_ERR(elevator_thread))
-		{
-			printk("ERROR! run_elevator\n");
-			return PTR_ERR(kthread);
-		}
-
 		STUB_start_elevator = my_start_elevator;
 		STUB_issue_request = my_issue_request;
 		STUB_stop_elevator = my_stop_elevator;
@@ -269,10 +274,6 @@ static int elevator_init(void)
 
 static void elevator_exit(void)
 {
-		int ret = kthread_stop(kthread);
-		if (ret != -EINTR)
-			printk("run elevator has stopped\n");
-
 		remove_proc_entry(ENTRY_NAME, NULL);
 		printk(KERN_NOTICE "Removing /proc/%s.\n", ENTRY_NAME);
 
