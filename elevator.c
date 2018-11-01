@@ -24,8 +24,9 @@ extern long (*STUB_stop_elevator)(void);
 
 typedef enum{ OFFLINE, IDLE, LOADING, UP, DOWN } States;
 
-// declare start of list, can optionally be w/in struct
-// floor offset by one, ex. floor1 == floor[0]
+/* 	declare start of list, can optionally be w/in struc
+ *	floor offset by one, ex. floor1 == floor[0]
+ */ 
 struct list_head Floors[10];
 static int elevatorSignal[10];
 
@@ -51,7 +52,7 @@ static struct list_head *temp;
 static struct list_head *dummy;
 static Person *tempP;
 static Elevator elevator;
-
+static struct task_struct * elevator_thread;
 
 /* ===========================THREAD_FUNC_BEGIN===========================
    int thread_run(void *data)
@@ -149,38 +150,41 @@ int elevator_release(struct inode * sp_inode, struct file *sp_file)
 
 int run_elevator(void *data)
 {
-
-  while (!kthread_should_stop())
-    {
-	int i;
-
-	//iterate throughout elevatorSignal and check
-	//if button has been push
-	//if button has been pushed, then update elevator.next_floor
-	//is updated
-	for (i = 0; i < 10; i++)
-	{
-		if (elevatorSignal[i] == 1)
+		printk(KERN_INFO "run_elevator is running\n");
+		while (!kthread_should_stop())
 		{
-			//Go to this floor
-			elevator.next_floor = i;
+				int i;
+
+				//iterate throughout elevatorSignal and check
+				//if button has been push
+				//if button has been pushed, then update elevator.next_floor
+				//is updated
+				for (i = 0; i < 10; i++)
+				{
+						if (elevatorSignal[i] == 1)
+						{
+								//Go to this floor
+								printk("ElevatorSignal[%d] == 1\n", i);
+								elevator.next_floor = i;
+								elevator.elevator_state = UP;
+								break;
+						}
+				} 
+
+				if (elevator.elevator_state == UP)
+				{
+					while (elevator.current_floor != elevator.next_floor)
+					{
+							ssleep(2);
+							elevator.current_floor++;
+					}
+	
+					elevator.elevator_state = LOADING;
+		
+				}
 		}
-	} 
-	
 
-	while (elevator.current_floor != elevator.next_floor)
-	{
-		ssleep(2);
-		elevator.current_floor++;
-	}
-
-	elevator.elevator_state = LOADING;
-//	elevatorSignal[i] = 0;
-    }
-
-	
-
-	return 0;
+		return 0;
 }
 
 long my_start_elevator(void)
@@ -193,7 +197,7 @@ long my_start_elevator(void)
 		elevator.numofPeople = 0;
 		elevator.elevator_state = IDLE;	
 		elevator.current_floor = 1;
-		elevator.next_floor = 1;
+		elevator.next_floor = -1;
 
 		return 0;
 }
@@ -216,7 +220,7 @@ long my_issue_request(int passenger_type, int start_floor, int destination_floor
 		/*  // build people in appropriate line
 			list_add_tail(&person->floor, &Floors[0]);
 			printk(KERN_NOTICE "%s: You called issue_request: %d\n", __FUNCTION__,passenger_type);
-			*/
+		 */
 		return passenger_type;
 }
 
@@ -240,12 +244,20 @@ static int elevator_init(void)
 				remove_proc_entry(ENTRY_NAME, NULL);
 				return -ENOMEM;
 		}
-		
+
 		// init list to empty  	
 		for (i=0; i < 10; i++)
 		{
 				INIT_LIST_HEAD(&Floors[i]);
 				elevatorSignal[i] = 0;
+		}
+
+		elevator_thread = kthread_run(run_elevator, NULL, "Elevator Thread");
+
+		if (IS_ERR(elevator_thread))
+		{
+			printk("ERROR! run_elevator\n");
+			return PTR_ERR(kthread);
 		}
 
 		STUB_start_elevator = my_start_elevator;
@@ -257,6 +269,10 @@ static int elevator_init(void)
 
 static void elevator_exit(void)
 {
+		int ret = kthread_stop(kthread);
+		if (ret != -EINTR)
+			printk("run elevator has stopped\n");
+
 		remove_proc_entry(ENTRY_NAME, NULL);
 		printk(KERN_NOTICE "Removing /proc/%s.\n", ENTRY_NAME);
 
