@@ -24,10 +24,16 @@ extern long (*STUB_stop_elevator)(void);
 typedef enum{ OFFLINE, IDLE, LOADING, UP, DOWN } States;
 
 /* 	declare start of list, can optionally be w/in struc
+<<<<<<< HEAD
  *	floor offset by one
  */
  // refer to Floors[1-10], ignore Floor[0]
 static struct list_head Floors[11];
+=======
+ *	floor offset by one, ex. floor1 == floor[0]
+ */ 
+struct list_head Floors[11];
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 static int elevatorSignal[11];
 
 // object has to have list_head embedded in it
@@ -134,6 +140,7 @@ int elevator_release(struct inode * sp_inode, struct file *sp_file)
 		return 0;
 }
 
+<<<<<<< HEAD
 /* ########################## PROC FUNCTIONS END ############################ */
 
 
@@ -158,6 +165,23 @@ double getWeight(int type)
 	}
 	return 0.0;
 }
+=======
+void move_elevator(int dir)
+{
+	while( elevator.current_floor != elevator.next_floor)
+	{
+		ssleep(2);
+		
+		if (dir == 3)
+			elevator.current_floor++;
+		else
+			elevator.current_floor--;
+	}
+
+	elevator.elevator_state = LOADING;
+}
+
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 
 int run_elevator(void *data)
 {
@@ -165,24 +189,38 @@ int run_elevator(void *data)
 		while (!kthread_should_stop())
 		{
 				int i;
+				printk("in k thread loop\n");
 
 				//iterate throughout elevatorSignal and check
 				//if button has been push
 				//if button has been pushed, then update elevator.next_floor
 				//is updated
+<<<<<<< HEAD
 				for (i = 1; i < 11; i++)
+=======
+				for (i = 0; i < 11; i++)
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 				{
 						if (elevatorSignal[i] == 1 && elevator.numofPeople <= 0)
 						{
 								//Go to this floor
-								printk("ElevatorSignal[%d] == 1\n", i);
 								elevator.next_floor = i;
 
+<<<<<<< HEAD
+=======
+
+								if (elevator.current_floor < elevator.next_floor)
+									elevator.elevator_state = UP;
+								else
+									elevator.elevator_state = DOWN;
+
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 								elevatorSignal[i] = 0;
 								break;
 						}
 				}
 
+<<<<<<< HEAD
 				printk("no elev signal, go to person in elev\n");
 
 				if (elevator.next_floor > elevator.current_floor) elevator.elevator_state = UP;
@@ -243,6 +281,13 @@ int run_elevator(void *data)
             elevator.next_floor = tempP->destination_floor;
         }
 
+=======
+				if (elevator.elevator_state != LOADING && elevator.elevator_state != IDLE)
+					move_elevator(elevator.elevator_state);
+
+
+				//Drop of the passengers				
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 				ssleep(1);
 		}
 
@@ -264,14 +309,23 @@ long my_start_elevator(void)
 		elevator.numofPeople = 0;
 		elevator.elevator_state = IDLE;
 		elevator.current_floor = 1;
+<<<<<<< HEAD
 		elevator.next_floor = 1;
+=======
+		elevator.next_floor = 0;
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 
 		elevator_thread = kthread_run(run_elevator, NULL, "Elevator Thread");
 
 		if (IS_ERR(elevator_thread))
 		{
+<<<<<<< HEAD
 				printk("ERROR! run_elevator\n");
 				return PTR_ERR(elevator_thread);
+=======
+			printk("ERROR! run_elevator\n");
+			return PTR_ERR(elevator_thread);
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 		}
 
 		return 0;
@@ -302,9 +356,17 @@ long my_stop_elevator(void)
 {
 		int ret;
 		printk(KERN_NOTICE "%s: You called stop_elevator\n", __FUNCTION__);
+<<<<<<< HEAD
 		ret = kthread_stop(elevator_thread);
 		if (ret != -EINTR)
 				printk("run elevator has stopped\n");
+=======
+	   	ret = kthread_stop(elevator_thread);
+		if (ret != -EINTR)
+			printk("run elevator has stopped\n");
+		else
+			printk("run elevator has not stopped\n");
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 
 		return 0;
 }
@@ -329,8 +391,13 @@ static int elevator_init(void)
 				return -ENOMEM;
 		}
 
+<<<<<<< HEAD
 		// init list to empty
 		for (i=1; i < 11; i++)
+=======
+		// init list to empty  	
+		for (i=0; i < 11; i++)
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 		{
 				INIT_LIST_HEAD(&Floors[i]);
 				elevatorSignal[i] = 0;
@@ -348,6 +415,7 @@ static void elevator_exit(void)
 		remove_proc_entry(ENTRY_NAME, NULL);
 		printk(KERN_NOTICE "Removing /proc/%s.\n", ENTRY_NAME);
 
+<<<<<<< HEAD
 /* USE FOR LOOP TO DELETE ALL PEOPLE IN FLOORS AND ELEVATOR
 		list_for_each(temp, &Floors[0]) {
 				tempP = list_entry(temp, Person, floor);
@@ -355,6 +423,8 @@ static void elevator_exit(void)
 								tempP->passenger_type, tempP->start_floor, tempP->destination_floor);
 		}
 
+=======
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 		list_for_each_safe(temp, dummy, &Floors[0]) {
 				tempP=list_entry(temp, Person, floor);
 
