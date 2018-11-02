@@ -9,7 +9,7 @@
 #include <linux/string.h>
 #include <linux/kthread.h>
 #include <linux/delay.h>
-
+#include <math.h>
 #define ENTRY_NAME "elevator"
 #define PERMS 0644
 #define PARENT NULL
@@ -24,9 +24,16 @@ extern long (*STUB_stop_elevator)(void);
 typedef enum{ OFFLINE, IDLE, LOADING, UP, DOWN } States;
 
 /* 	declare start of list, can optionally be w/in struc
+<<<<<<< HEAD
+ *	floor offset by one
+ */
+ // refer to Floors[1-10], ignore Floor[0]
+static struct list_head Floors[11];
+=======
  *	floor offset by one, ex. floor1 == floor[0]
  */ 
 struct list_head Floors[11];
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 static int elevatorSignal[11];
 
 // object has to have list_head embedded in it
@@ -39,7 +46,7 @@ typedef struct person {
 
 typedef struct elevator {
 		struct list_head occupancy;
-		int Totalweight;
+		double Totalweight;
 		int numofPeople;
 		States elevator_state;
 		int current_floor;
@@ -52,19 +59,6 @@ static struct list_head *dummy;
 static Person *tempP;
 static Elevator elevator;
 static struct task_struct * elevator_thread;
-
-/* ===========================THREAD_FUNC_BEGIN===========================
-   int thread_run(void *data)
-   {
-
-   }
-
-   void thread_init_parameter(struct thread_parameter *parm)
-   {
-
-   }
-   ===========================THREAD_FUNC_END===========================*/
-
 
 /* ########################## PROC FUNCTIONS ############################ */
 
@@ -82,7 +76,7 @@ int elevator_open(struct inode *sp_inode, struct file *sp_file) {
 		{
 				printk(KERN_WARNING "Elevator proc open: message is null\n");
 				return -ENOMEM;
-		}		
+		}
 
 		strcpy(message, "STATE: ");
 
@@ -102,7 +96,7 @@ int elevator_open(struct inode *sp_inode, struct file *sp_file) {
 						break;
 				case DOWN:
 						strcat(message, "DOWN");
-						break;	
+						break;
 		}
 
 		strcat(message, "\n");
@@ -116,7 +110,7 @@ int elevator_open(struct inode *sp_inode, struct file *sp_file) {
 		sprintf(message + strlen(message), "%d", elevator.numofPeople);
 		strcat(message, "\n");
 		strcat (message, "TOTAL WEIGHT: ");
-		sprintf(message + strlen(message), "%d", elevator.Totalweight);
+		sprintf(message + strlen(message), "%f", elevator.Totalweight);
 		strcat(message, "\n");
 		printk(KERN_INFO  "%s", message);
 
@@ -134,18 +128,44 @@ ssize_t elevator_read(struct file * sp_file, char __user * buf, size_t size, lof
 				return 0;
 
 		printk(KERN_INFO "elevator proc called read\n");
-		copy_to_user(buf, message, len); 
+		copy_to_user(buf, message, len);
 
-		return len; 
+		return len;
 }
 
 int elevator_release(struct inode * sp_inode, struct file *sp_file)
 {
 		printk(KERN_INFO "elevator proc called release\n");
 		kfree(message);
-		return 0; 
+		return 0;
 }
 
+<<<<<<< HEAD
+/* ########################## PROC FUNCTIONS END ############################ */
+
+
+/* ########################## THREAD FUNCTIONS ############################ */
+
+double getWeight(int type)
+{
+	switch (type)
+	{
+		case 0:
+			return 1.0;
+			break;
+		case 1:
+			return 0.5;
+			break;
+		case 2:
+			return 2.0;
+			break;
+		case 3:
+			return 2.0;
+			break;
+	}
+	return 0.0;
+}
+=======
 void move_elevator(int dir)
 {
 	while( elevator.current_floor != elevator.next_floor)
@@ -161,6 +181,7 @@ void move_elevator(int dir)
 	elevator.elevator_state = LOADING;
 }
 
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 
 int run_elevator(void *data)
 {
@@ -174,59 +195,141 @@ int run_elevator(void *data)
 				//if button has been push
 				//if button has been pushed, then update elevator.next_floor
 				//is updated
+<<<<<<< HEAD
+				for (i = 1; i < 11; i++)
+=======
 				for (i = 0; i < 11; i++)
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 				{
-						if (elevatorSignal[i] == 1)
+						if (elevatorSignal[i] == 1 && elevator.numofPeople <= 0)
 						{
 								//Go to this floor
 								elevator.next_floor = i;
 
+<<<<<<< HEAD
+=======
 
 								if (elevator.current_floor < elevator.next_floor)
 									elevator.elevator_state = UP;
 								else
 									elevator.elevator_state = DOWN;
 
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 								elevatorSignal[i] = 0;
 								break;
 						}
-				} 
+				}
 
+<<<<<<< HEAD
+				printk("no elev signal, go to person in elev\n");
+
+				if (elevator.next_floor > elevator.current_floor) elevator.elevator_state = UP;
+				else if (elevator.next_floor < elevator.current_floor) elevator.elevator_state = DOWN;
+
+
+				printk("elevator.next_floor = %d and i = %d", elevator.next_floor, i);
+				if (elevator.elevator_state == UP)
+				{
+					printk("in UP\n");
+
+						while (elevator.current_floor != elevator.next_floor)
+						{
+								ssleep(2);
+								elevator.current_floor++;
+						}
+						elevator.elevator_state = LOADING;
+
+				}
+				else if (elevator.elevator_state == DOWN)
+				{
+					printk("in DOWN\n");
+
+						while (elevator.current_floor != elevator.next_floor)
+						{
+								ssleep(2);
+								elevator.current_floor--;
+						}
+						elevator.elevator_state = LOADING;
+				}
+        // drop off, then add
+        // assumes current_floor [1-11]
+
+        // drop off
+        list_for_each_safe(temp, dummy, &elevator.occupancy)
+        {
+          tempP = list_entry(temp, Person, floor);
+          if (tempP->destination_floor == elevator.current_floor)
+          {
+						elevator.numofPeople--;
+						elevator.Totalweight-=getWeight(tempP->passenger_type);
+            list_del(temp);
+            kfree(tempP);
+            printk("dropped off person!!!");
+          }
+        }
+
+        // add to elevator.occupancy
+        list_for_each_safe(temp, dummy, &Floors[elevator.current_floor])
+        {
+					elevator.numofPeople++;
+					elevator.Totalweight+=getWeight(tempP->passenger_type);
+          list_move_tail(temp, &elevator.occupancy);
+        }
+        list_for_each(temp, &elevator.occupancy)
+        {
+            tempP = list_entry(temp, Person, floor);
+            elevator.next_floor = tempP->destination_floor;
+        }
+
+=======
 				if (elevator.elevator_state != LOADING && elevator.elevator_state != IDLE)
 					move_elevator(elevator.elevator_state);
 
 
 				//Drop of the passengers				
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 				ssleep(1);
 		}
 
 		return 0;
 }
 
+/* ########################## THREAD FUNCTIONS END ############################ */
+
+
+/* ########################## SYSTEM CALL FUNCTIONS ############################ */
+
 long my_start_elevator(void)
 {
 		printk(KERN_NOTICE "%s: You called start_elevator\n" ,__FUNCTION__);
-		// Initializes elevator structure for use		
+		// Initializes elevator structure for use
 
 		INIT_LIST_HEAD(&elevator.occupancy);
 		elevator.Totalweight = 0;
 		elevator.numofPeople = 0;
-		elevator.elevator_state = IDLE;	
+		elevator.elevator_state = IDLE;
 		elevator.current_floor = 1;
+<<<<<<< HEAD
+		elevator.next_floor = 1;
+=======
 		elevator.next_floor = 0;
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 
 		elevator_thread = kthread_run(run_elevator, NULL, "Elevator Thread");
 
 		if (IS_ERR(elevator_thread))
 		{
+<<<<<<< HEAD
+				printk("ERROR! run_elevator\n");
+				return PTR_ERR(elevator_thread);
+=======
 			printk("ERROR! run_elevator\n");
 			return PTR_ERR(elevator_thread);
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 		}
 
-	return 0;
+		return 0;
 }
-
-
 
 long my_issue_request(int passenger_type, int start_floor, int destination_floor)
 {
@@ -244,22 +347,34 @@ long my_issue_request(int passenger_type, int start_floor, int destination_floor
 		/*  // build people in appropriate line
 			list_add_tail(&person->floor, &Floors[0]);
 			printk(KERN_NOTICE "%s: You called issue_request: %d\n", __FUNCTION__,passenger_type);
-		 */
+			*/
 		return passenger_type;
 }
+
 
 long my_stop_elevator(void)
 {
 		int ret;
 		printk(KERN_NOTICE "%s: You called stop_elevator\n", __FUNCTION__);
+<<<<<<< HEAD
+		ret = kthread_stop(elevator_thread);
+		if (ret != -EINTR)
+				printk("run elevator has stopped\n");
+=======
 	   	ret = kthread_stop(elevator_thread);
 		if (ret != -EINTR)
 			printk("run elevator has stopped\n");
 		else
 			printk("run elevator has not stopped\n");
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 
-	return 0;
+		return 0;
 }
+
+/* ########################## SYSTEM CALL FUNCTIONS END ############################ */
+
+
+/* ########################## SYSTEM CALL FUNCTIONS ############################ */
 
 static int elevator_init(void)
 {
@@ -276,8 +391,13 @@ static int elevator_init(void)
 				return -ENOMEM;
 		}
 
+<<<<<<< HEAD
+		// init list to empty
+		for (i=1; i < 11; i++)
+=======
 		// init list to empty  	
 		for (i=0; i < 11; i++)
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 		{
 				INIT_LIST_HEAD(&Floors[i]);
 				elevatorSignal[i] = 0;
@@ -295,13 +415,23 @@ static void elevator_exit(void)
 		remove_proc_entry(ENTRY_NAME, NULL);
 		printk(KERN_NOTICE "Removing /proc/%s.\n", ENTRY_NAME);
 
+<<<<<<< HEAD
+/* USE FOR LOOP TO DELETE ALL PEOPLE IN FLOORS AND ELEVATOR
+		list_for_each(temp, &Floors[0]) {
+				tempP = list_entry(temp, Person, floor);
+				printk(KERN_INFO "person type: %d\nstart_floor: %d\ndestination_floor: %d\n",
+								tempP->passenger_type, tempP->start_floor, tempP->destination_floor);
+		}
+
+=======
+>>>>>>> 89fef5c39860db58a0ea2a09a332050d9e411ee7
 		list_for_each_safe(temp, dummy, &Floors[0]) {
 				tempP=list_entry(temp, Person, floor);
 
 				list_del(temp);
 				kfree(tempP);
 		}
-
+*/
 		STUB_start_elevator = NULL;
 		STUB_issue_request = NULL;
 		STUB_stop_elevator = NULL;
@@ -309,3 +439,5 @@ static void elevator_exit(void)
 
 module_init(elevator_init);
 module_exit(elevator_exit);
+
+/* ########################## SYSTEM CALL FUNCTIONS END ############################ */
