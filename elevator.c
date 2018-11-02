@@ -15,7 +15,6 @@
 #define PARENT NULL
 
 MODULE_LICENSE("GPL");
-static struct task_struct *kthread;
 
 // extern function pointers
 extern long (*STUB_start_elevator)(void);
@@ -27,8 +26,8 @@ typedef enum{ OFFLINE, IDLE, LOADING, UP, DOWN } States;
 /* 	declare start of list, can optionally be w/in struc
  *	floor offset by one, ex. floor1 == floor[0]
  */ 
-struct list_head Floors[10];
-static int elevatorSignal[10];
+struct list_head Floors[11];
+static int elevatorSignal[11];
 
 // object has to have list_head embedded in it
 typedef struct person {
@@ -147,6 +146,21 @@ int elevator_release(struct inode * sp_inode, struct file *sp_file)
 		return 0; 
 }
 
+void move_elevator(int dir)
+{
+	while( elevator.current_floor != elevator.next_floor)
+	{
+		ssleep(2);
+		
+		if (dir == 3)
+			elevator.current_floor++;
+		else
+			elevator.current_floor--;
+	}
+
+	elevator.elevator_state = LOADING;
+}
+
 
 int run_elevator(void *data)
 {
@@ -154,34 +168,36 @@ int run_elevator(void *data)
 		while (!kthread_should_stop())
 		{
 				int i;
+				printk("in k thread loop\n");
 
 				//iterate throughout elevatorSignal and check
 				//if button has been push
 				//if button has been pushed, then update elevator.next_floor
 				//is updated
-				for (i = 0; i < 10; i++)
+				for (i = 0; i < 11; i++)
 				{
 						if (elevatorSignal[i] == 1)
 						{
 								//Go to this floor
-								printk("ElevatorSignal[%d] == 1\n", i);
 								elevator.next_floor = i;
-								elevator.elevator_state = UP;
+
+
+								if (elevator.current_floor < elevator.next_floor)
+									elevator.elevator_state = UP;
+								else
+									elevator.elevator_state = DOWN;
+
+								elevatorSignal[i] = 0;
 								break;
 						}
 				} 
 
-				if (elevator.elevator_state == UP)
-				{
-					while (elevator.current_floor != elevator.next_floor)
-					{
-							ssleep(2);
-							elevator.current_floor++;
-					}
-	
-					elevator.elevator_state = LOADING;
-		
-				}
+				if (elevator.elevator_state != LOADING && elevator.elevator_state != IDLE)
+					move_elevator(elevator.elevator_state);
+
+
+				//Drop of the passengers				
+				ssleep(1);
 		}
 
 		return 0;
@@ -197,14 +213,14 @@ long my_start_elevator(void)
 		elevator.numofPeople = 0;
 		elevator.elevator_state = IDLE;	
 		elevator.current_floor = 1;
-		elevator.next_floor = -1;
+		elevator.next_floor = 0;
 
 		elevator_thread = kthread_run(run_elevator, NULL, "Elevator Thread");
 
 		if (IS_ERR(elevator_thread))
 		{
 			printk("ERROR! run_elevator\n");
-			return PTR_ERR(kthread);
+			return PTR_ERR(elevator_thread);
 		}
 
 	return 0;
@@ -218,8 +234,8 @@ long my_issue_request(int passenger_type, int start_floor, int destination_floor
 		// Creates a Dynamic Person
 		person = kmalloc(sizeof(Person), __GFP_RECLAIM);
 		person->passenger_type = passenger_type;
-		person->start_floor = 0;
-		person->destination_floor = destination_floor - 1;
+		person->start_floor = start_floor;
+		person->destination_floor = destination_floor;
 
 		//add person to specified floor
 		list_add_tail(&person->floor, &Floors[ person->start_floor ]);
@@ -236,9 +252,11 @@ long my_stop_elevator(void)
 {
 		int ret;
 		printk(KERN_NOTICE "%s: You called stop_elevator\n", __FUNCTION__);
-	   	ret = kthread_stop(kthread);
+	   	ret = kthread_stop(elevator_thread);
 		if (ret != -EINTR)
 			printk("run elevator has stopped\n");
+		else
+			printk("run elevator has not stopped\n");
 
 	return 0;
 }
@@ -259,7 +277,7 @@ static int elevator_init(void)
 		}
 
 		// init list to empty  	
-		for (i=0; i < 10; i++)
+		for (i=0; i < 11; i++)
 		{
 				INIT_LIST_HEAD(&Floors[i]);
 				elevatorSignal[i] = 0;
@@ -276,12 +294,6 @@ static void elevator_exit(void)
 {
 		remove_proc_entry(ENTRY_NAME, NULL);
 		printk(KERN_NOTICE "Removing /proc/%s.\n", ENTRY_NAME);
-
-		list_for_each(temp, &Floors[0]) {
-				tempP = list_entry(temp, Person, floor);
-				printk(KERN_INFO "person type: %d\nstart_floor: %d\ndestination_floor: %d\n",
-								tempP->passenger_type, tempP->start_floor, tempP->destination_floor);
-		}
 
 		list_for_each_safe(temp, dummy, &Floors[0]) {
 				tempP=list_entry(temp, Person, floor);
