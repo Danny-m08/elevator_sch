@@ -14,6 +14,9 @@
 #define PERMS 0644
 #define PARENT NULL
 
+#define WEIGHT_MAX 10
+#define PASSENGER_MAX 8
+
 MODULE_LICENSE("GPL");
 
 // extern function pointers
@@ -54,19 +57,6 @@ static struct list_head *dummy;
 static Person *tempP;
 static Elevator elevator;
 static struct task_struct * elevator_thread;
-//static int isFloatingPoint = 0;
-/* ===========================THREAD_FUNC_BEGIN===========================
-   int thread_run(void *data)
-   {
-
-   }
-
-   void thread_init_parameter(struct thread_parameter *parm)
-   {
-
-   }
-   ===========================THREAD_FUNC_END===========================*/
-
 
 /* ########################## PROC FUNCTIONS ############################ */
 
@@ -74,10 +64,11 @@ static struct file_operations fops;
 static char *message;
 static int read_p;
 
+
 int elevator_open(struct inode *sp_inode, struct file *sp_file) {
 
 		int i;
-		printk(KERN_INFO "elevator_open proc is called\n");
+		//		printk(KERN_INFO "elevator_open proc is called\n");
 		read_p = 1;
 		message = kmalloc(sizeof(char) * 2048, __GFP_RECLAIM | __GFP_IO | __GFP_FS);
 
@@ -119,14 +110,7 @@ int elevator_open(struct inode *sp_inode, struct file *sp_file) {
 		sprintf(message + strlen(message), "%d", elevator.numofPeople);
 		strcat(message, "\n");
 		strcat (message, "TOTAL WEIGHT: ");
-/*
-		if (isFloatingPoint == 1)
-		{
-				sprintf(message + strlen(message), "%d.5", elevator.Totalweight - 1);
-		}
-		else
-				sprintf(message + strlen(message), "%d", elevator.Totalweight);
-*/
+
 		sprintf(message + strlen(message), "%d.%d", elevator.weightUnit, elevator.decimalWeightUnit);
 		strcat(message, "\n");
 
@@ -141,7 +125,6 @@ int elevator_open(struct inode *sp_inode, struct file *sp_file) {
 				sprintf(message + strlen(message), "\tPerson.start_floor = %d", tempP -> start_floor);
 				sprintf(message + strlen(message), "\tPerson.dest_floor = %d\n", tempP -> destination_floor);
 		}
-		printk(KERN_INFO  "%s", message);
 
 		return 0;
 }
@@ -155,163 +138,141 @@ ssize_t elevator_read(struct file * sp_file, char __user * buf, size_t size, lof
 		if (read_p)
 				return 0;
 
-		printk(KERN_INFO "elevator proc called read\n");
+		//		printk(KERN_INFO "elevator proc called read\n");
 		copy_to_user(buf, message, len);
-
 		return len;
 }
 
 int elevator_release(struct inode * sp_inode, struct file *sp_file)
 {
-		printk(KERN_INFO "elevator proc called release\n");
+		//		printk(KERN_INFO "elevator proc called release\n");
 		kfree(message);
 		return 0;
 }
 
+int isFloorEmpty(int i)
+{
+		Person * checkForPeople;
+		checkForPeople = NULL;	
+		list_for_each(temp, &Floors[i])
+		{
+
+				checkForPeople = list_entry(temp, Person, floor);
+
+				if (checkForPeople == NULL)
+						return 1;
+				else
+						return 0;	
+		}
+}
 void addWeight(int type, int *weightUnit, int *decimalWeightUnit)
 {
-switch (type)
-	{
-  	case 0:
-    	*weightUnit = *weightUnit + 1;
-    	break;
-		case 1:
-    	*decimalWeightUnit = *decimalWeightUnit + 5;
-			break;
-  	case 2:
-    	*weightUnit = *weightUnit + 2;
-    	break;
-  	case 3:
-    	*weightUnit = *weightUnit + 2;
-    	break;
-	}
-	// if decimalWeightUnit gets to 10, carryover 1
-	if (*decimalWeightUnit == 10)
+		switch (type)
 		{
-			*weightUnit = *weightUnit + 1;
-			*decimalWeightUnit=0;
+				case 0:
+						*weightUnit = *weightUnit + 1;
+						break;
+				case 1:
+						*decimalWeightUnit = *decimalWeightUnit + 5;
+						break;
+				case 2:
+						*weightUnit = *weightUnit + 2;
+						break;
+				case 3:
+						*weightUnit = *weightUnit + 2;
+						break;
+		}
+		// if decimalWeightUnit gets to 10, carryover 1
+		if (*decimalWeightUnit == 10)
+		{
+				*weightUnit = *weightUnit + 1;
+				*decimalWeightUnit=0;
 		}
 }
 
 void loseWeight(int type, int *weightUnit, int *decimalWeightUnit)
 {
-switch (type)
-	{
-  	case 0:
-    	*weightUnit = *weightUnit - 1;
-    	break;
-		case 1:
-    	*decimalWeightUnit = *decimalWeightUnit - 5;
-			break;
-  	case 2:
-    	*weightUnit = *weightUnit - 2;
-    	break;
-  	case 3:
-    	*weightUnit = *weightUnit - 2;
-    	break;
-	}
-	// if decimalWeightUnit gets to -5, leave 5 and decr weightUnit-1
-	if (*decimalWeightUnit == -5)
+		switch (type)
 		{
-			*weightUnit = *weightUnit - 1;
-			*decimalWeightUnit=5;
+				case 0:
+						*weightUnit = *weightUnit - 1;
+						break;
+				case 1:
+						*decimalWeightUnit = *decimalWeightUnit - 5;
+						break;
+				case 2:
+						*weightUnit = *weightUnit - 2;
+						break;
+				case 3:
+						*weightUnit = *weightUnit - 2;
+						break;
+		}
+		// if decimalWeightUnit gets to -5, leave 5 and decr weightUnit-1
+		if (*decimalWeightUnit == -5)
+		{
+				*weightUnit = *weightUnit - 1;
+				*decimalWeightUnit=5;
 		}
 }
 
-void move_elevator(int dir)
+// load as many people in a specific floor into our elev as possible
+// return num of people loaded
+int loadPassengers(int i)
 {
-		while( elevator.current_floor != elevator.next_floor)
-		{
-				ssleep(2);
-
-				if (dir == 3)
-						elevator.current_floor++;
-				else
-						elevator.current_floor--;
-		}
-
-		elevator.prev_state = elevator.elevator_state;
-		elevator.elevator_state = LOADING;
-}
-/*int loadUp(int i)
-  {
-  Person * tempPerson;
-
-  int j;
-  j = 0;
-  list_for_each_safe(temp, dummy, &Floors[i])
-  {
-  tempP = list_entry(temp, Person, floor);
-  j++;
-  }
-
-  return 0;
-
-
-  }*/
-
-/*
-	function takes the index of a specific floor and the person in the list
-	that you want to bring on board, seems to work
-	to specific the first person of the queue pass in 0
-
-*/
-int  loadUp(int i, int itr)
-{
+		// tempP is a person pointer
+		// i is floor
+		//iterate throughout a specific floor
+		int j;
+		// treat as boolean
+		int elevatorEmpty;
+		States tempPDir;
 		Person * tempPerson;
 
-		int j;
 		j = 0;
-		//iterate throughout a specific floor
-		list_for_each_safe(temp, dummy, &Floors[i])
+		elevatorEmpty = 0;
+		if (elevator.weightUnit == 0) elevatorEmpty = 1;
+
+		if (elevator.elevator_state == LOADING)
 		{
-				tempP = list_entry(temp, Person, floor);
-
-				// once we reached the itr-th person
-				if (j == itr)
+				list_for_each_safe(temp, dummy, &Floors[i])
 				{
-						//create a new Person object
-						//copy the data from the specific person you want from the floor list
-						// to the new Person
-						// add new person object you just created to the elevator list
-						tempPerson = kmalloc(sizeof(Person), __GFP_RECLAIM);
-						tempPerson -> passenger_type = tempP -> passenger_type;
-						tempPerson -> start_floor = tempP -> start_floor;
-						tempPerson -> destination_floor	= tempP -> destination_floor;
-						list_add_tail(&tempPerson -> floor, &elevator.occupancy);
+						tempP = list_entry(temp, Person, floor);
+						if (tempP -> destination_floor < tempP -> start_floor)	tempPDir = DOWN;
+						else 													tempPDir = UP;
 
-						elevator.numofPeople++;
+						addWeight(tempP -> passenger_type, &(elevator.weightUnit), &(elevator.decimalWeightUnit));
 
-/*
-						if (tempPerson -> passenger_type == 0)	//Adult
-								elevator.Totalweight += 1;
-						else if (tempPerson -> passenger_type == 1) // child
+						// if elevator weight <= 10 exactly and the person in the floor is going in the statement
+						// direction as the elevator, pick them up
+						if ( ((elevator.weightUnit < 10 || (elevator.weightUnit == 10 && elevator.decimalWeightUnit == 0)) && 
+							elevator.elevator_state == tempPDir) ||  elevatorEmpty == 1)
 						{
-								if (isFloatingPoint == 0)
-										isFloatingPoint	= 1;
-								else
-										isFloatingPoint	= 0;
+								printk("PICKED UP PERSONT @ FLOOR %d", i);
+								// tempPerson is deep copy, tempP is original
+								j++;
+								tempPerson = kmalloc(sizeof(Person), __GFP_RECLAIM);
+								tempPerson -> passenger_type = tempP -> passenger_type;
+								tempPerson -> start_floor = tempP -> start_floor;
+								tempPerson -> destination_floor	= tempP -> destination_floor;
+								list_add_tail(&tempPerson -> floor, &elevator.occupancy);
+								elevator.numofPeople++;
 
-								elevator.Totalweight += 1;
+								// delete old copy from the floor list
+								list_del(temp);
+								kfree(tempP);
+
+								if (list_empty(&Floors[i]) == 1)
+								{
+									elevatorSignal[i] = 0;
+								}
 						}
-						else if ( tempPerson -> passenger_type == 2 || tempPerson -> passenger_type == 3)
-								elevator.Totalweight += 2;
-*/
- 						addWeight(tempPerson->passenger_type, &(elevator.weightUnit), &(elevator.decimalWeightUnit));
-
-
-
-						//delete the old person from the floor list
-						list_del(temp);
-						kfree(tempP);
-						return 1;
+						else 			loseWeight(tempP -> passenger_type, &(elevator.weightUnit), &(elevator.decimalWeightUnit));
 				}
-
-				j++;
 		}
 
-		return 0;
+		return j;
 }
+
 
 void remove_passengers(void)
 {
@@ -324,21 +285,7 @@ void remove_passengers(void)
 				// boot the person out
 				if (tempP -> destination_floor == elevator.current_floor)
 				{
-/*
-						if (tempP -> passenger_type == 1)	//if passenger is child
-						{
-								if (isFloatingPoint == 1)	// turn and/off if it is a floating point to account for
-										isFloatingPoint = 0; // 0.5 weight
-								else
-										isFloatingPoint = 1;
-						}
 
-						// if passenger is room service or bellhoop, subtract their weight from total weight
-						if (tempP -> passenger_type	== 2 || tempP -> passenger_type	== 3)
-								elevator.Totalweight -= 2;
-						else
-								elevator.Totalweight--;	//other wise substract regularly for child and adult
-*/
 						loseWeight(tempP->passenger_type, &(elevator.weightUnit), &(elevator.decimalWeightUnit));
 						list_del(temp);	//delete person and decrement number of people in the elevator
 						kfree(tempP);
@@ -348,19 +295,44 @@ void remove_passengers(void)
 
 }
 
+
+void move_elevator(int dir)
+{
+		States temp;
+		while( elevator.current_floor != elevator.next_floor)
+		{
+				ssleep(2);
+
+				temp = elevator.elevator_state;
+				elevator.elevator_state = LOADING;
+
+				loadPassengers(elevator.current_floor);
+
+				elevator.elevator_state = temp;
+				if (dir == 3)
+						elevator.current_floor++;
+				else
+						elevator.current_floor--;
+
+		}
+
+		elevator.prev_state = elevator.elevator_state;
+		elevator.elevator_state = LOADING;
+}
+
+
 int run_elevator(void *data)
 {
 		printk(KERN_INFO "run_elevator is running\n");
 		while (!kthread_should_stop())
 		{
 				int i;
-				printk("in k thread loop\n");
 
 				/*
-				 	use elevatorSignal if the elevator list is empty,
-					go to the first floor that button has been pushed,
-					if poeple are already in the elevator, they take priority and
-					elevate has to service them first (hence the else statement)
+				   use elevatorSignal if the elevator list is empty,
+				   go to the first floor that button has been pushed,
+				   if poeple are already in the elevator, they take priority and
+				   elevate has to service them first (hence the else statement)
 				 */
 				if (elevator.numofPeople == 0)
 				{
@@ -386,10 +358,10 @@ int run_elevator(void *data)
 				else
 				{
 						/*
-							if the elevator is loading, iterate throughout the elevator list
-							and check for the first person that wants to get off in the same
-							direction that elevator was heading in the first place ( hend elevator.prev_state)
-						*/
+						   if the elevator is loading, iterate throughout the elevator list
+						   and check for the first person that wants to get off in the same
+						   direction that elevator was heading in the first place ( hend elevator.prev_state)
+						 */
 						if (elevator.elevator_state == LOADING)
 						{
 								list_for_each(temp, &elevator.occupancy)
@@ -443,7 +415,7 @@ int run_elevator(void *data)
 				// we have stop at a specific floor and dropped of passengers, time to load up bois
 				// this function does not take care of weight yet
 				if (elevator.elevator_state == LOADING)
-						loadUp(elevator.current_floor, 0);
+						loadPassengers(elevator.current_floor);
 
 
 				ssleep(1);
@@ -494,15 +466,6 @@ long my_issue_request(int passenger_type, int start_floor, int destination_floor
 		list_add_tail(&person->floor, &Floors[ person->start_floor ]);
 		elevatorSignal[person->start_floor] = 1;
 
-		list_for_each(temp, &Floors[person->start_floor])
-		{
-				tempP = list_entry(temp, Person, floor);
-
-				printk("Person %d: ", i++);
-				printk("\tPerson.type = %d", tempP -> passenger_type);
-				printk("\tPerson.start_floor = %d", tempP -> start_floor);
-				printk("\tPerson.dest_floor = %d\n", tempP -> destination_floor);
-		}
 
 		/*  // build people in appropriate line
 			list_add_tail(&person->floor, &Floors[0]);
