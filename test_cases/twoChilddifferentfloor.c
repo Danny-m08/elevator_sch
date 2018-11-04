@@ -20,14 +20,14 @@ void setParameters(Person * s, int t, int sf, int ds)
 	s -> type = t;
 }
 
-int main(int argc, char ** argc[])
+int main(int argc, char ** argv[])
 {
 	srand(time(0));
 
 	Person p1;
 	setParameters(&p1, 1, 3, 5);
 	Person p2;
-	setParmeters(&p1, 1, 3, 6);
+	setParameters(&p1, 1, 3, 6);
 
 
 	issue_request(p1.type, p1.start_floor, p1.dest_floor);
